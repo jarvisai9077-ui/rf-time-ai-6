@@ -1,0 +1,31 @@
+{
+  "summary": "TIME AI (offline Expo app) first-run frontend test on mobile viewport 390x844. Today dashboard, Calendar, Agent and Hub tabs all load. Agent natural-language commands (add task, create goal, add habit, note, schedule meeting, plan my day, help, undo) correctly produce PROPOSED ACTIONS which require explicit approval and apply successfully (verified by cross-module data appearance). All 21 Hub module tiles navigate without red screen or crash. Tasks screen FAB + bottom-sheet form creates a task (submit button needs scroll-into-view). Calendar supports day/week/month/year/agenda views. Settings theme-dark toggle and data integrity check work. AsyncStorage persistence verified across page reload. Deprecated package detected: expo-router/unstable-native-tabs (warning in logs).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Task editor bottom sheet", "issue": "On 390x844 viewport the form-submit-button (Save) renders at y=768 inside the bottom sheet; it is reachable but requires scroll-into-view. First tap may be reported as 'outside of the viewport' by Playwright. Users on short devices may need to scroll the sheet. Reference: /app/frontend/src/ui/forms.ts / /app/frontend/src/ui/overlay.tsx", "testID": "form-submit-button", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "expo-router/unstable-native-tabs", "issue": "Deprecated API in use. Console warning: '`expo-router/unstable-native-tabs` is deprecated. Use `expo-router/native-tabs` instead.' Reference: /app/frontend/app/(tabs)/_layout.tsx and /app/frontend/src/navigation.ts"}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_1.json"],
+  "action_items": [
+    "Migrate from `expo-router/unstable-native-tabs` to the stable `expo-router/native-tabs` import in app/(tabs)/_layout.tsx and src/navigation.ts",
+    "Make the bottom-sheet form content scrollable (or shrink its height) so form-submit-button is comfortably within the 844px viewport without needing scroll on first open"
+  ],
+  "critical_code_review_comments": [
+    "Agent interpret() in /app/frontend/src/engine/agent.ts has correct ordering: help/memory/reminder/plan/schedule-N-hours/move/break-project/study/conflicts/free/brief/review/complete/delete/habit/goal/project/workspace/note/event/task — verified no regex fall-through found during testing.",
+    "FlatList in agent.tsx uses `inverted` with pre-sorted descending data (b.createdAt.localeCompare(a.createdAt)); this is correct and preserves correct visual order but note that DOM order of children becomes oldest-first (relevant for test selectors).",
+    "db.ts uses AsyncStorage; persistence confirmed after reload. Good."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (no backend)", "frontend": "95%"},
+  "seed_data_creation": "During testing created: task 'Write essay' (via agent, session-scoped), goal 'Read 12 books by 2026-12-31', habit 'Drink water', note 'Ideas', task 'TEST_Groceries'. Persistence verified post-reload for TEST_Groceries.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "App is fully offline (AsyncStorage via src/store/db.ts). Use mobile viewport 390x844. Agent FlatList is inverted (b.createdAt desc) — DOM order of [data-testid=agent-reply-message] is oldest-first, so use .last to assert on the newest reply. All forms are overlay bottom sheets (testID=bottom-sheet) with field-* and form-submit-button; may need .scroll_into_view_if_needed() before clicking submit on short viewports. Confirm dialogs: confirm-ok-button / confirm-cancel-button. Tab bar uses native tabs; navigate via get_by_text(label).first.click() for Today/Calendar/Agent/Hub, or direct URLs /tasks /calendar /settings /queue etc. 21 Hub modules all loaded successfully in this run.",
+  "rca_of_issue": "Not applicable — no app bugs found. Two intermittent test-side failures in first pass were caused by (a) FlatList inverted DOM ordering (used .first instead of .last on agent replies, picked up stale 'New task:' reply), and (b) form-submit-button at the bottom of the bottom-sheet needs scroll_into_view_if_needed in web preview. Both were re-verified and passed in the follow-up run."
+}
