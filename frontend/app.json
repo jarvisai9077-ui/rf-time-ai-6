@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "TIME AI",
-    "slug": "frontend",
+    "slug": "time-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,14 +9,14 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.offlinelifeos.z3cc5m"
+      "bundleIdentifier": "com.timeai.lifeplanner"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#FF5E00"
       },
-      "package": "com.emergent.offlinelifeos.z3cc5m",
+      "package": "com.timeai.lifeplanner",
       "permissions": [
         "POST_NOTIFICATIONS",
         "RECEIVE_BOOT_COMPLETED",

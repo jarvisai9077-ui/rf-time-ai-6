@@ -10,6 +10,7 @@ import { db, Item, useCol } from "@/src/store/db";
 import { radius, spacing, type, useTheme } from "@/src/theme";
 import { Backdrop, Badge, Btn, Chip, Icon, IconBtn, T } from "@/src/ui/kit";
 import { useUI } from "@/src/ui/overlay";
+import { BrandLogo } from "@/src/ui/brand";
 
 const SUGGESTIONS = ["plan my day", "what's free today", "schedule two hours of revision before friday", "move unfinished tasks", "weekly review", "what should I study", "show conflicts", "help"];
 
@@ -89,7 +90,7 @@ export default function Agent() {
     <View testID="agent-screen" style={{ flex: 1, backgroundColor: colors.surface }}>
       <Backdrop />
       <View style={{ paddingTop: insets.top + spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: 1, borderBottomColor: colors.divider, backgroundColor: colors.glass }}>
-        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" }}><Icon name="sparkles" color={colors.onBrandPrimary} /></View>
+        <BrandLogo size={40} testID="agent-brand-logo" />
         <View style={{ flex: 1 }}><T v="headline">TIME AI Agent</T><T v="caption" muted>On-device rules engine · not an LLM · works offline</T></View>
         <IconBtn testID="agent-queue-button" label="Action queue" icon="list" onPress={() => router.push("/queue")} />
         <IconBtn testID="agent-clear-button" label="Clear history" icon="trash-outline" onPress={async () => { if (await ui.confirm({ title: "Clear conversation?", message: "Deletes local chat history. Actions and data are kept.", destructive: true, confirmLabel: "Clear" })) db.replace("messages", [], "Clear chat"); }} />

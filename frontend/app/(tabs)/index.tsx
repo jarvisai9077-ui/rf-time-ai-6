@@ -14,6 +14,7 @@ import { Badge, Btn, Check, Empty, Glass, Icon, IconBtn, Progress, Row, Screen, 
 import { QuickGrid } from "@/src/ui/quick";
 import { completeTask } from "@/src/ui/forms";
 import { useUI } from "@/src/ui/overlay";
+import { BrandLogo } from "@/src/ui/brand";
 import { format } from "date-fns";
 
 export default function Today() {
@@ -134,7 +135,10 @@ export default function Today() {
       right={<><IconBtn testID="home-search-button" label="Search" icon="search" onPress={() => router.push("/search")} /><IconBtn testID="home-settings-button" label="Customize" icon="options" onPress={() => router.push("/settings?tab=dashboard")} /></>}>
       {!st.onboarded ? (
         <Glass testID="onboarding-card" style={{ gap: 8, borderColor: colors.brandPrimary }}>
-          <T v="headline">Welcome to TIME AI</T>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <BrandLogo size={44} testID="onboarding-brand-logo" />
+            <T v="headline" style={{ flex: 1 }}>Welcome to TIME AI</T>
+          </View>
           <T muted>Everything runs on this device — no account, no internet, no cloud AI. The Agent is a transparent local rule engine. Start by adding a task or event, or ask the Agent.</T>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Btn testID="onboarding-dismiss" small label="Got it" icon="checkmark" onPress={() => db.setSettings({ onboarded: true })} />

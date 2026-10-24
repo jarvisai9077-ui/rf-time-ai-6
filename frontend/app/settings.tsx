@@ -11,6 +11,8 @@ import { fmtDT } from "@/src/engine/time";
 import { Badge, Btn, Chip, ChipRow, Divider, Glass, IconBtn, Row, Screen, Section, T } from "@/src/ui/kit";
 import { useUI } from "@/src/ui/overlay";
 import { emailSupport, SUPPORT_EMAIL } from "@/src/legal";
+import { BrandLogo } from "@/src/ui/brand";
+import Constants from "expo-constants";
 
 type Tab = "general" | "planning" | "dashboard" | "modules" | "memory" | "privacy" | "data" | "about";
 
@@ -117,6 +119,14 @@ export default function Settings() {
         </Glass>
       </> : null}
       {tab === "about" ? <>
+      <Glass testID="settings-about-brand" style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+        <BrandLogo size={64} testID="settings-brand-logo" />
+        <View style={{ flex: 1, gap: 2 }}>
+          <T v="title">TIME AI</T>
+          <T v="caption" muted>Your private, on-device time & life planner</T>
+          <T v="caption" muted>Version {Constants.expoConfig?.version ?? "1.0.0"}</T>
+        </View>
+      </Glass>
       <Glass style={{ gap: 4 }}>
         <Row testID="settings-privacy-link" title="Privacy Policy" left={<IconBtn label="Privacy" icon="shield-checkmark-outline" onPress={() => router.push("/privacy")} />} onPress={() => router.push("/privacy")} />
         <Divider />
