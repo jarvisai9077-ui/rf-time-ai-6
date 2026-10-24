@@ -1,6 +1,7 @@
 // App-level overlays: toasts (with undo), confirm dialogs, generic form sheets.
-import { createContext, ReactNode, useCallback, useContext, useRef, useState } from "react";
-import { Modal, Pressable, Text, TextInput, View } from "react-native";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Keyboard, Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { onAppError } from "./errorBus";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import Animated, { FadeInUp, FadeOutDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,6 +30,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const toast = useCallback((msg: string, undo?: () => void) => {
     setToast({ msg, undo }); clearTimeout(timer.current); timer.current = setTimeout(() => setToast(null), undo ? 5000 : 3000);
   }, []);
+  useEffect(() => onAppError((m) => toast("⚠ " + m)), [toast]);
   const confirm = useCallback((o: Omit<ConfirmReq, "resolve">) => new Promise<boolean>((resolve) => setConf({ ...o, resolve })), []);
   const ctx: Ctx = { toast, confirm, form: setForm, closeForm: () => setForm(null), sheet: (title, content) => setSheet({ title, content }), closeSheet: () => setSheet(null) };
   return (
@@ -58,7 +60,7 @@ function ConfirmDialog({ req, onClose }: { req: ConfirmReq; onClose: () => void 
   const { colors } = useTheme();
   const done = (b: boolean) => { req.resolve(b); onClose(); };
   return (
-    <Modal transparent animationType="fade" onRequestClose={() => done(false)}>
+    <Modal transparent animationType="fade" onRequestClose={() => done(false)} statusBarTranslucent>
       <View style={{ flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: spacing.xl }}>
         <View testID="confirm-dialog" style={{ backgroundColor: colors.sheet, borderRadius: radius.xl, padding: spacing.xl, width: "100%", maxWidth: 420, gap: spacing.md }}>
           <T v="headline">{req.title}</T>
@@ -76,15 +78,15 @@ function ConfirmDialog({ req, onClose }: { req: ConfirmReq; onClose: () => void 
 export function Sheet({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   const { colors } = useTheme(); const insets = useSafeAreaInsets();
   return (
-    <Modal transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: colors.overlay }} onPress={onClose} testID="sheet-backdrop" />
+    <Modal transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent={Platform.OS === "android"}>
+      <Pressable style={{ flex: 1, backgroundColor: colors.overlay }} onPress={() => { Keyboard.dismiss(); onClose(); }} testID="sheet-backdrop" />
       <View testID="bottom-sheet" style={{ maxHeight: "88%", backgroundColor: colors.sheet, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingBottom: insets.bottom + spacing.md }}>
         <View style={{ alignItems: "center", paddingTop: 8 }}><View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong }} /></View>
         <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.md }}>
           <T v="title" style={{ flex: 1 }}>{title}</T>
           <Pressable testID="sheet-close-button" accessibilityLabel="Close" hitSlop={10} onPress={onClose}><Icon name="close-circle" size={28} color={colors.muted} /></Pressable>
         </View>
-        <KeyboardAwareScrollView bottomOffset={24} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.md }}>{children}</KeyboardAwareScrollView>
+        <KeyboardAwareScrollView bottomOffset={24} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.md }}>{children}</KeyboardAwareScrollView>
       </View>
     </Modal>
   );
@@ -105,6 +107,9 @@ function FormSheet({ req, onClose, toast }: { req: FormReq; onClose: () => void;
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const setV = (k: string, v: any) => setVals((p) => ({ ...p, [k]: v }));
+  const refs = useRef<Record<string, any>>({});
+  const textKeys = req.fields.filter((f) => !["select", "multiselect", "toggle"].includes(f.type)).map((f) => f.key);
+  const nextKey = (k: string) => textKeys[textKeys.indexOf(k) + 1];
   const submit = async () => {
     const out: Record<string, any> = {};
     for (const f of req.fields) {
@@ -116,6 +121,7 @@ function FormSheet({ req, onClose, toast }: { req: FormReq; onClose: () => void;
       else if (f.type === "tags") out[f.key] = String(v).split(",").map((x) => x.trim()).filter(Boolean);
       else out[f.key] = typeof v === "string" ? v.trim() : v;
     }
+    Keyboard.dismiss();
     setBusy(true);
     try {
       const r = await req.onSubmit(out);
@@ -145,7 +151,7 @@ function FormSheet({ req, onClose, toast }: { req: FormReq; onClose: () => void;
             </Pressable>
           ) : (
             <>
-              <TextInput testID={`field-${f.key}`} accessibilityLabel={f.label} value={String(vals[f.key] ?? "")} onChangeText={(t) => setV(f.key, t)} placeholder={f.placeholder ?? (f.type === "date" ? "YYYY-MM-DD" : f.type === "datetime" ? "YYYY-MM-DD HH:mm" : f.type === "time" ? "HH:mm" : f.type === "tags" ? "comma, separated" : "")} placeholderTextColor={colors.muted} multiline={f.type === "multiline"} keyboardType={f.type === "number" ? "decimal-pad" : "default"} style={[inputStyle, f.type === "multiline" && { minHeight: 110, textAlignVertical: "top" }]} />
+              <TextInput ref={(r) => { refs.current[f.key] = r; }} returnKeyType={f.type === "multiline" ? "default" : nextKey(f.key) ? "next" : "done"} submitBehavior={f.type === "multiline" ? "newline" : nextKey(f.key) ? "submit" : "blurAndSubmit"} onSubmitEditing={() => { if (f.type === "multiline") return; const n = nextKey(f.key); if (n) refs.current[n]?.focus(); else submit(); }} autoCapitalize={f.type === "text" || f.type === "multiline" ? "sentences" : "none"} autoCorrect={f.type === "text" || f.type === "multiline"} testID={`field-${f.key}`} accessibilityLabel={f.label} value={String(vals[f.key] ?? "")} onChangeText={(t) => setV(f.key, t)} placeholder={f.placeholder ?? (f.type === "date" ? "YYYY-MM-DD" : f.type === "datetime" ? "YYYY-MM-DD HH:mm" : f.type === "time" ? "HH:mm" : f.type === "tags" ? "comma, separated" : "")} placeholderTextColor={colors.muted} multiline={f.type === "multiline"} keyboardType={f.type === "number" ? "decimal-pad" : f.type === "date" || f.type === "datetime" || f.type === "time" ? "numbers-and-punctuation" : "default"} style={[inputStyle, f.type === "multiline" && { minHeight: 110, textAlignVertical: "top" }]} />
               {f.type === "date" || f.type === "datetime" ? (
                 <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
                   {[["Today", 0], ["Tomorrow", 1], ["+3d", 3], ["+1w", 7]].map(([l, n]) => <Chip key={l as string} label={l as string} onPress={() => { const d = addDays(new Date(), n as number); if (f.type === "datetime") { const prev = parseDateInput(vals[f.key] ?? "", true); d.setHours(prev?.getHours() ?? 9, prev?.getMinutes() ?? 0, 0, 0); setV(f.key, fmtDT(d)); } else setV(f.key, fmtDate(d)); }} />)}

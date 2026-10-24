@@ -97,11 +97,16 @@ function schedulePersist(key: string) {
 export async function flush() {
   const keys = [...dirty];
   dirty.clear();
-  for (const k of keys) {
-    const value = k === "settings" ? state.settings : state.data[k as Col];
-    const ok = await storage.setItem(PREFIX + k, JSON.stringify(value));
-    if (!ok) set({ persistError: `Could not save "${k}" to device storage. Storage may be full. Your change is kept in memory; free space and reopen the app.` });
-  }
+  await Promise.all(keys.map(async (k) => {
+    try {
+      const value = k === "settings" ? state.settings : state.data[k as Col];
+      const ok = await storage.setItem(PREFIX + k, JSON.stringify(value));
+      if (!ok) throw new Error("write rejected");
+    } catch {
+      dirty.add(k); // keep it dirty so the next flush retries
+      set({ persistError: `Could not save "${k}" to device storage. Storage may be full. Your change is kept in memory and will retry; free some space.` });
+    }
+  }));
 }
 
 function migrate(from: number, data: Record<Col, Item[]>, settings: Settings) {
@@ -118,19 +123,19 @@ function migrate(from: number, data: Record<Col, Item[]>, settings: Settings) {
 export async function hydrate() {
   const data = empty();
   const errors: string[] = [];
-  for (const c of COLLECTIONS) {
-    const raw = await storage.getItem(PREFIX + c, null as string | null);
-    if (raw) {
-      try { const arr = JSON.parse(String(raw)); if (Array.isArray(arr)) data[c] = arr; else errors.push(c); } catch { errors.push(c); }
-    }
-  }
+  // Read every collection in parallel (one round-trip window instead of 40+ sequential reads).
+  const safeGet = (k: string) => storage.getItem(PREFIX + k, null as string | null).catch(() => { errors.push(k); return null; });
+  const [raws, rawS, rawV] = await Promise.all([Promise.all(COLLECTIONS.map((c) => safeGet(c))), safeGet("settings"), storage.getItem(PREFIX + "schema", 0).catch(() => 0)]);
+  COLLECTIONS.forEach((c, i) => {
+    const raw = raws[i];
+    if (raw) { try { const arr = JSON.parse(String(raw)); if (Array.isArray(arr)) data[c] = arr; else errors.push(c); } catch { errors.push(c); } }
+  });
   let settings = defaultSettings;
-  const rawS = await storage.getItem(PREFIX + "settings", null as string | null);
   if (rawS) { try { settings = { ...defaultSettings, ...JSON.parse(String(rawS)) }; } catch { errors.push("settings"); } }
-  const version = Number(await storage.getItem(PREFIX + "schema", 0)) || 0;
+  const version = Number(rawV) || 0;
   let m = { data, settings };
   try { m = migrate(version, data, settings); } catch (e: any) { errors.push("migration: " + e?.message); }
-  await storage.setItem(PREFIX + "schema", SCHEMA_VERSION);
+  if (version !== SCHEMA_VERSION) storage.setItem(PREFIX + "schema", SCHEMA_VERSION).catch(() => {});
   // Recovery: actions that were running when the app was killed are marked failed (retryable)
   m.data.queue = m.data.queue.map((q) => (q.status === "running" ? { ...q, status: "failed", error: "Interrupted: app was closed while running. You can retry." } : q));
   if (m.data.calendars.length === 0) {

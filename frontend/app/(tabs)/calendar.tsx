@@ -1,6 +1,6 @@
 import { addDays, addMonths, endOfDay, endOfMonth, endOfWeek, endOfYear, format, isSameDay, startOfDay, startOfMonth, startOfWeek, startOfYear } from "date-fns";
 import { useMemo, useState } from "react";
-import { Pressable, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usesNativeTabs } from "@/src/navigation";
 import { conflicts, expandEvents, freeSlots, Occ, openTasks, planTasks, suggestSlot, visibleEvents } from "@/src/engine/planner";
@@ -138,14 +138,19 @@ export default function Calendar() {
   const grid = (month: Date, mini = false) => {
     const start = startOfWeek(startOfMonth(month), { weekStartsOn: st.weekStart });
     const days = Array.from({ length: 42 }, (_, i) => addDays(start, i));
-    const all = expandEvents(visibleEvents(), start, addDays(start, 42));
+    const counts = new Map<string, number>();
+    if (!mini || occ.length) for (const e of expandEvents(visibleEvents(), start, addDays(start, 42))) { const k = format(e.s, "yyyy-MM-dd"); counts.set(k, (counts.get(k) ?? 0) + 1); }
     return (
       <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
         {!mini ? Array.from({ length: 7 }, (_, i) => <View key={i} style={{ width: "14.28%", alignItems: "center", paddingVertical: 4 }}><T v="caption" muted>{format(addDays(start, i), "EEEEE")}</T></View>) : null}
         {days.map((d) => {
-          const n = all.filter((e) => isSameDay(e.s, d)).length;
+          const n = counts.get(format(d, "yyyy-MM-dd")) ?? 0;
           const inMonth = d.getMonth() === month.getMonth();
           const sel = isSameDay(d, cursor); const today = isSameDay(d, new Date());
+          if (mini) return (
+            <View key={d.toISOString()} style={{ width: "14.28%", height: 18, alignItems: "center", justifyContent: "center", backgroundColor: today ? colors.brandTertiary : "transparent", borderRadius: 8 }}>
+              <Text style={{ fontSize: 9, color: inMonth ? (n ? colors.brandPrimary : colors.onSurface) : "transparent", fontWeight: n ? "700" : "400" }}>{format(d, "d")}</Text>
+            </View>);
           return (
             <Pressable key={d.toISOString()} testID={mini ? undefined : `cal-day-${format(d, "yyyy-MM-dd")}`} onPress={() => { setCursor(d); setView("day"); }} style={{ width: "14.28%", height: mini ? 18 : 46, alignItems: "center", justifyContent: "center" }}>
               <View style={{ width: mini ? 16 : 34, height: mini ? 16 : 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: sel && !mini ? colors.brandPrimary : today ? colors.brandTertiary : "transparent" }}>

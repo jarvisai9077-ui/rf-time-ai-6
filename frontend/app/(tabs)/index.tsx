@@ -1,5 +1,5 @@
 import { Redirect, router } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { endOfDay, addDays } from "date-fns";
@@ -25,20 +25,22 @@ export default function Today() {
   // subscribe to collections so the dashboard re-renders on any change
   const tasks = useCol("tasks"); const events = useCol("events"); const goals = useCol("goals"); const habits = useCol("habits");
   const notes = useCol("notes"); const queue = useCol("queue"); const focus = useCol("focusSessions"); const routines = useCol("routines");
-  useCol("topics"); useCol("flashcards"); const inbox = useCol("inbox"); useCol("reminders");
-  const [, force] = useState(0);
+  const topics = useCol("topics"); const cards = useCol("flashcards"); const inbox = useCol("inbox"); const reminders = useCol("reminders"); const attempts = useCol("attempts"); const cals = useCol("calendars");
+  const [refresh, force] = useState(0);
   const now = new Date();
+  // Heavy planner/learning computations are memoized and only recomputed when their source data changes.
+  const todays = useMemo(() => dayEvents(new Date()), [events, cals, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pr = useMemo(() => prioritized().slice(0, 5), [tasks, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  const budget = useMemo(() => todayBudget(st), [tasks, events, st, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  const recs = useMemo(() => recommendTopics(2), [topics, attempts, cards, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dueCount = useMemo(() => dueCards().length, [cards, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+  const missed = useMemo(() => missedReminders(), [reminders, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
   if (st.kidsMode) return <Redirect href="/kids" />;
-  const todays = dayEvents(now);
   const next = todays.find((e) => e.e > now) ?? null;
-  const pr = prioritized().slice(0, 5);
-  const budget = todayBudget(st);
   const deadlines = tasks.filter((t) => t.status !== "done" && t.due && new Date(t.due) <= endOfDay(addDays(now, 7))).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 4);
   const pending = queue.filter((q) => q.status === "pending" || q.status === "failed");
   const tk = todayKey();
   const focusToday = focus.filter((f) => f.start?.slice(0, 10) === tk);
-  const recs = recommendTopics(2);
-  const missed = missedReminders();
   const unread = inbox.filter((i) => !i.read);
   const doneToday = tasks.filter((t) => t.status === "done" && t.completedAt?.slice(0, 10) === tk).length;
   const pinned = [...notes.filter((n) => n.pinned).map((n) => ({ t: n.title, icon: "document-text", r: `/note/${n.id}` })), ...goals.filter((g) => g.pinned).map((g) => ({ t: g.title, icon: "flag", r: "/goals" })), ...tasks.filter((x) => x.pinned && x.status !== "done").map((x) => ({ t: x.title, icon: "checkbox", r: "/tasks" })), ...db.list("projects").filter((p) => p.pinned).map((p) => ({ t: p.title, icon: "briefcase", r: `/project/${p.id}` })), ...db.list("workspaces").filter((p) => p.pinned).map((p) => ({ t: p.name, icon: "albums", r: "/workspaces" })), ...db.list("databases").filter((p) => p.pinned).map((p) => ({ t: p.name, icon: "grid", r: `/database/${p.id}` }))];
@@ -92,7 +94,7 @@ export default function Today() {
     learning: () => (
       <Section key="learning" title="Learning & revisions" action="Student" onAction={() => router.push("/student")} testID="widget-learning">
         <Glass style={{ gap: 6 }}>
-          <T testID="due-cards-count">{dueCards().length} flashcard(s) due · streak {studyStreak()}d</T>
+          <T testID="due-cards-count">{dueCount} flashcard(s) due · streak {studyStreak()}d</T>
           {recs.map((r) => <T key={r.t.id} v="caption" muted>• {r.t.name}: {r.why[0] ?? "balanced practice"}</T>)}
           {!recs.length ? <T v="caption" muted>Add subjects & topics in Student Mode.</T> : null}
         </Glass>

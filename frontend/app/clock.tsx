@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { AppState, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { db, useCol, useSettings } from "@/src/store/db";
 import { spacing, useTheme } from "@/src/theme";
@@ -12,6 +12,7 @@ import { useUI } from "@/src/ui/overlay";
 const ZONES = ["UTC", "Europe/London", "Europe/Berlin", "Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo", "Australia/Sydney", "America/New_York", "America/Chicago", "America/Los_Angeles", "America/Sao_Paulo", "Africa/Lagos"];
 const pad = (n: number) => String(Math.floor(n)).padStart(2, "0");
 const fmtMs = (ms: number, cs = false) => { const s = ms / 1000; return `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}${cs ? "." + pad((ms % 1000) / 10) : ""}`; };
+function Live({ ms, on, render }: { ms: number; on: boolean; render: () => React.ReactNode }) { useTick(ms, on); return <>{render()}</>; }
 function useTick(ms: number, on = true) { const [, s] = useState(0); useEffect(() => { if (!on) return; const i = setInterval(() => s((x) => x + 1), ms); return () => clearInterval(i); }, [ms, on]); }
 
 // Timers are timestamp-based, so they stay correct after backgrounding.
@@ -22,18 +23,20 @@ export default function Clock() {
   const insets = useSafeAreaInsets(); const ui = useUI(); const { colors } = useTheme(); const st = useSettings();
   const [tab, setTab] = useState<string>(params.tab ?? "clock");
   const alarms = useCol("alarms"); const zones = useCol("worldClocks"); const sessions = useCol("focusSessions"); const logs = useCol("timeLogs");
-  useTick(tab === "stopwatch" ? 50 : 1000);
+  useTick(1000, tab === "clock" || tab === "world"); // only the live clock tabs re-render each second
   const now = new Date();
   // timer
   const [tEnd, setTEnd] = useState<number | null>(null); const [tLeft, setTLeft] = useState(0); const [tDur, setTDur] = useState(5 * 60000); const [tNotif, setTNotif] = useState<string | null>(null);
-  const tRemain = tEnd ? Math.max(0, tEnd - Date.now()) : tLeft || tDur;
-  useEffect(() => { if (tEnd && tRemain === 0) { setTEnd(null); setTLeft(0); ui.toast("⏰ Timer finished"); } }, [tEnd, tRemain, ui]);
+  const tRemainNow = () => (tEnd ? Math.max(0, tEnd - Date.now()) : tLeft || tDur);
+  useEffect(() => { if (!tEnd) return; const id = setTimeout(() => { setTEnd(null); setTLeft(0); ui.toast("⏰ Timer finished"); }, Math.max(0, tEnd - Date.now())); return () => clearTimeout(id); }, [tEnd, ui]);
   // stopwatch
   const [swStart, setSwStart] = useState<number | null>(null); const [swAcc, setSwAcc] = useState(0); const [laps, setLaps] = useState<number[]>([]);
-  const swTime = swAcc + (swStart ? Date.now() - swStart : 0);
+  const swNow = () => swAcc + (swStart ? Date.now() - swStart : 0);
   // focus
   const [fMode, setFMode] = useState<"work" | "break">("work"); const [fEnd, setFEnd] = useState<number | null>(null); const [fStart, setFStart] = useState<number | null>(null); const [fMin, setFMin] = useState(st.pomodoroWork); const [fKind, setFKind] = useState<"study" | "work">("study"); const [interrupts, setInterrupts] = useState(0); const [fCount, setFCount] = useState(0);
-  const fRemain = fEnd ? Math.max(0, fEnd - Date.now()) : fMin * 60000;
+  const fRemainNow = () => (fEnd ? Math.max(0, fEnd - Date.now()) : fMin * 60000);
+  const [fTick, setFTick] = useState(0);
+  useEffect(() => { if (!fEnd) return; const id = setTimeout(() => setFTick((t) => t + 1), Math.max(0, fEnd - Date.now()) + 50); return () => clearTimeout(id); }, [fEnd]);
   const fNotif = useRef<string | null>(null);
   const finishFocus = (early = false) => {
     if (fStart && fMode === "work") {
@@ -45,7 +48,7 @@ export default function Clock() {
     setFEnd(null); setFStart(null); setInterrupts(0);
   };
   useEffect(() => {
-    if (fEnd && fRemain === 0) {
+    if (fEnd && fEnd <= Date.now()) {
       finishFocus();
       const next = fMode === "work" ? "break" : "work"; setFMode(next);
       const longBreak = next === "break" && (fCount + 1) % 4 === 0;
@@ -53,8 +56,7 @@ export default function Clock() {
       ui.toast(next === "break" ? `Session done — take a ${longBreak ? "long " : ""}break` : "Break over — ready to focus");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fEnd, fRemain]);
-  useEffect(() => { const s = AppState.addEventListener("change", () => {}); return () => s.remove(); }, []);
+  }, [fTick]);
 
   const startFocus = async () => {
     const end = Date.now() + fMin * 60000; setFEnd(end); setFStart(Date.now());
@@ -102,19 +104,19 @@ export default function Clock() {
       </> : null}
 
       {tab === "timer" ? <Glass style={{ gap: spacing.md, alignItems: "center" }}>
-        <Big testID="timer-display">{fmtMs(tRemain)}</Big>
+        <Live ms={250} on={!!tEnd} render={() => <Big testID="timer-display">{fmtMs(tRemainNow())}</Big>} />
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>{[1, 3, 5, 10, 15, 25, 45, 60].map((m) => <Chip key={m} testID={`timer-preset-${m}`} label={`${m}m`} active={tDur === m * 60000 && !tEnd} onPress={() => { setTDur(m * 60000); setTLeft(0); setTEnd(null); }} />)}</View>
         <View style={{ flexDirection: "row", gap: 8 }}>
-          {tEnd ? <Btn testID="timer-pause" label="Pause" kind="secondary" onPress={() => { setTLeft(tRemain); setTEnd(null); if (tNotif) cancelMany([tNotif]); }} /> : <Btn testID="timer-start" label={tLeft ? "Resume" : "Start"} onPress={async () => { const end = Date.now() + (tLeft || tDur); setTEnd(end); const r = await scheduleReminder("Timer finished", new Date(end), { kind: "timer", priority: "high" }); setTNotif(r.notifId); }} />}
+          {tEnd ? <Btn testID="timer-pause" label="Pause" kind="secondary" onPress={() => { setTLeft(tRemainNow()); setTEnd(null); if (tNotif) cancelMany([tNotif]); }} /> : <Btn testID="timer-start" label={tLeft ? "Resume" : "Start"} onPress={async () => { const end = Date.now() + (tLeft || tDur); setTEnd(end); const r = await scheduleReminder("Timer finished", new Date(end), { kind: "timer", priority: "high" }); setTNotif(r.notifId); }} />}
           <Btn testID="timer-reset" label="Reset" kind="ghost" onPress={() => { setTEnd(null); setTLeft(0); if (tNotif) cancelMany([tNotif]); }} />
         </View>
       </Glass> : null}
 
       {tab === "stopwatch" ? <Glass style={{ gap: spacing.md }}>
-        <Big testID="stopwatch-display">{fmtMs(swTime, true)}</Big>
+        <Live ms={60} on={!!swStart} render={() => <Big testID="stopwatch-display">{fmtMs(swNow(), true)}</Big>} />
         <View style={{ flexDirection: "row", gap: 8, justifyContent: "center" }}>
-          {swStart ? <Btn testID="sw-stop" label="Stop" kind="danger" onPress={() => { setSwAcc(swTime); setSwStart(null); }} /> : <Btn testID="sw-start" label="Start" onPress={() => setSwStart(Date.now())} />}
-          <Btn testID="sw-lap" label="Lap" kind="secondary" disabled={!swStart} onPress={() => setLaps([swTime, ...laps])} />
+          {swStart ? <Btn testID="sw-stop" label="Stop" kind="danger" onPress={() => { setSwAcc(swNow()); setSwStart(null); }} /> : <Btn testID="sw-start" label="Start" onPress={() => setSwStart(Date.now())} />}
+          <Btn testID="sw-lap" label="Lap" kind="secondary" disabled={!swStart} onPress={() => setLaps([swNow(), ...laps])} />
           <Btn testID="sw-reset" label="Reset" kind="ghost" onPress={() => { setSwStart(null); setSwAcc(0); setLaps([]); }} />
         </View>
         {laps.map((l, i) => <Row key={i} title={`Lap ${laps.length - i}`} right={<T>{fmtMs(l - (laps[i + 1] ?? 0), true)}</T>} />)}
@@ -123,7 +125,7 @@ export default function Clock() {
       {tab === "focus" ? <>
         <Glass style={{ gap: spacing.md, alignItems: "center" }} testID="focus-panel">
           <Badge label={fMode === "work" ? "FOCUS" : "BREAK"} tone={fMode === "work" ? "brand" : "success"} />
-          <Big testID="focus-display">{fmtMs(fRemain).slice(3)}</Big>
+          <Live ms={500} on={!!fEnd} render={() => <Big testID="focus-display">{fmtMs(fRemainNow()).slice(3)}</Big>} />
           {!fEnd ? <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>{[15, 25, 45, 50, 90].map((m) => <Chip key={m} testID={`focus-len-${m}`} label={`${m}m`} active={fMin === m} onPress={() => setFMin(m)} />)}<Chip label="Study" active={fKind === "study"} onPress={() => setFKind("study")} /><Chip label="Work" active={fKind === "work"} onPress={() => setFKind("work")} /></View> : null}
           <View style={{ flexDirection: "row", gap: 8 }}>
             {fEnd ? <><Btn testID="focus-stop" label="End early" kind="secondary" onPress={() => finishFocus(true)} /><Btn testID="focus-distraction" label={`Distracted (${interrupts})`} kind="ghost" onPress={() => { setInterrupts(interrupts + 1); db.add("timeLogs", { activity: "Focus interruption", category: "Distraction", minutes: 0, date: new Date().toISOString(), distraction: true }); }} /></> : <Btn testID="focus-start" label={fMode === "work" ? "Start focus" : "Start break"} icon="play" onPress={startFocus} />}

@@ -10,6 +10,7 @@ import { clearPin, hasPin, setPin } from "@/src/security";
 import { fmtDT } from "@/src/engine/time";
 import { Badge, Btn, Chip, ChipRow, Divider, Glass, IconBtn, Row, Screen, Section, T } from "@/src/ui/kit";
 import { useUI } from "@/src/ui/overlay";
+import { emailSupport, SUPPORT_EMAIL } from "@/src/legal";
 
 type Tab = "general" | "planning" | "dashboard" | "modules" | "memory" | "privacy" | "data" | "about";
 
@@ -115,7 +116,15 @@ export default function Settings() {
           }} />
         </Glass>
       </> : null}
-      {tab === "about" ? <Glass style={{ gap: 6 }}>
+      {tab === "about" ? <>
+      <Glass style={{ gap: 4 }}>
+        <Row testID="settings-privacy-link" title="Privacy Policy" left={<IconBtn label="Privacy" icon="shield-checkmark-outline" onPress={() => router.push("/privacy")} />} onPress={() => router.push("/privacy")} />
+        <Divider />
+        <Row testID="settings-terms-link" title="Terms & Conditions" left={<IconBtn label="Terms" icon="document-text-outline" onPress={() => router.push("/terms")} />} onPress={() => router.push("/terms")} />
+        <Divider />
+        <Row testID="settings-support-link" title="Contact support" subtitle={SUPPORT_EMAIL} left={<IconBtn label="Email" icon="mail-outline" onPress={() => emailSupport()} />} onPress={() => emailSupport()} />
+      </Glass>
+      <Glass style={{ gap: 6 }}>
         <T v="headline">TIME AI · honest limitations</T>
         <T v="caption" muted>{[
           "• AI Agent: deterministic on-device rule engine and planner — not a large language model. It understands specific command patterns and shows every change before applying.",
@@ -126,7 +135,7 @@ export default function Settings() {
           "• Home-screen widgets require a native Android build with a widget extension; use Pinned items on Today as the in-app alternative.",
           "• Readiness and completion dates are estimates from your own recorded evidence and are labelled as such.",
         ].join("\n")}</T>
-      </Glass> : null}
+      </Glass></> : null}
     </Screen>
   );
 }

@@ -37,6 +37,10 @@ export default function Hub() {
         </View>
       </Section>
       <T v="caption" muted style={{ textAlign: "center" }}>Hidden modules keep their data. Manage them in Settings › Modules.</T>
+      <View style={{ flexDirection: "row", justifyContent: "center", gap: spacing.lg }}>
+        <Pressable testID="hub-privacy-link" hitSlop={10} onPress={() => router.push("/privacy")}><T v="caption" color={colors.brandPrimary}>Privacy Policy</T></Pressable>
+        <Pressable testID="hub-terms-link" hitSlop={10} onPress={() => router.push("/terms")}><T v="caption" color={colors.brandPrimary}>Terms & Conditions</T></Pressable>
+      </View>
     </Screen>
   );
 }

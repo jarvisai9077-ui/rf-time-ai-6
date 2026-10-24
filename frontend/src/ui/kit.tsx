@@ -4,9 +4,9 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { ReactNode } from "react";
 import { Platform, Pressable, RefreshControl, ScrollView, StyleProp, Text, TextStyle, View, ViewStyle } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { makeStyles, radius, spacing, type, useTheme } from "@/src/theme";
+import { safely } from "./errorBus";
 
 export type IconName = React.ComponentProps<typeof Ionicons>["name"];
 export const Icon = ({ name, size = 20, color }: { name: string; size?: number; color?: string }) => {
@@ -29,7 +29,7 @@ export function Glass({ children, style, onPress, testID, strong }: { children: 
   const s = useStyles();
   const body = <View style={[s.glass, strong && s.glassStrong, style]}>{children}</View>;
   if (!onPress) return <View testID={testID}>{body}</View>;
-  return <Pressable testID={testID} onPress={() => { tap(); onPress(); }} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] })}>{body}</Pressable>;
+  return <Pressable testID={testID} onPress={() => { tap(); safely(onPress); }} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] })}>{body}</Pressable>;
 }
 
 export function T({ children, v = "body", style, muted, color, numberOfLines, testID }: { children: ReactNode; v?: keyof typeof type; style?: StyleProp<TextStyle>; muted?: boolean; color?: string; numberOfLines?: number; testID?: string }) {
@@ -42,7 +42,7 @@ export function Btn({ label, onPress, icon, kind = "primary", testID, small, dis
   const bg = kind === "primary" ? colors.brandPrimary : kind === "danger" ? colors.error : kind === "secondary" ? colors.brandTertiary : "transparent";
   const fg = kind === "primary" ? colors.onBrandPrimary : kind === "danger" ? colors.onError : kind === "secondary" ? colors.onBrandTertiary : colors.brandPrimary;
   return (
-    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={() => { tap(); onPress(); }}
+    <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} disabled={disabled} onPress={() => { tap(); safely(onPress); }}
       style={({ pressed }) => [{ backgroundColor: bg, opacity: disabled ? 0.45 : pressed ? 0.8 : 1, minHeight: small ? 36 : 48, paddingHorizontal: small ? 12 : 18, borderRadius: radius.pill, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }, style]}>
       {icon ? <Icon name={icon} size={small ? 16 : 18} color={fg} /> : null}
       <Text style={{ color: fg, fontWeight: "700", fontSize: small ? 13 : 15 }}>{label}</Text>
@@ -53,7 +53,7 @@ export function Btn({ label, onPress, icon, kind = "primary", testID, small, dis
 export function IconBtn({ icon, onPress, testID, label, color, filled }: { icon: string; onPress: () => void; testID?: string; label: string; color?: string; filled?: boolean }) {
   const { colors } = useTheme();
   return (
-    <Pressable testID={testID} accessibilityLabel={label} accessibilityRole="button" hitSlop={6} onPress={() => { tap(); onPress(); }}
+    <Pressable testID={testID} accessibilityLabel={label} accessibilityRole="button" hitSlop={6} onPress={() => { tap(); safely(onPress); }}
       style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: filled ? colors.brandPrimary : colors.glass, borderWidth: filled ? 0 : 1, borderColor: colors.glassBorder, opacity: pressed ? 0.7 : 1 })}>
       <Icon name={icon} size={20} color={filled ? colors.onBrandPrimary : color ?? colors.onSurface} />
     </Pressable>
@@ -63,7 +63,7 @@ export function IconBtn({ icon, onPress, testID, label, color, filled }: { icon:
 export function Chip({ label, active, onPress, testID, icon }: { label: string; active?: boolean; onPress: () => void; testID?: string; icon?: string }) {
   const { colors } = useTheme();
   return (
-    <Pressable testID={testID} accessibilityRole="button" accessibilityState={{ selected: !!active }} onPress={() => { tap(); onPress(); }}
+    <Pressable testID={testID} accessibilityRole="button" accessibilityState={{ selected: !!active }} onPress={() => { tap(); safely(onPress); }}
       style={{ height: 36, flexShrink: 0, paddingHorizontal: 14, borderRadius: radius.pill, flexDirection: "row", gap: 6, alignItems: "center", backgroundColor: active ? colors.brandPrimary : colors.glass, borderWidth: 1, borderColor: active ? colors.brandPrimary : colors.border }}>
       {icon ? <Icon name={icon} size={14} color={active ? colors.onBrandPrimary : colors.onSurfaceTertiary} /> : null}
       <Text style={{ fontSize: 13, fontWeight: "600", color: active ? colors.onBrandPrimary : colors.onSurfaceTertiary }}>{label}</Text>
@@ -111,20 +111,20 @@ export function Screen({ title, subtitle, children, right, back = true, scroll =
 export function Section({ title, action, onAction, children, testID, delay = 0 }: { title: string; action?: string; onAction?: () => void; children: ReactNode; testID?: string; delay?: number }) {
   const { colors } = useTheme();
   return (
-    <Animated.View entering={FadeInDown.delay(delay).duration(300)} testID={testID} style={{ gap: spacing.sm }}>
+    <View testID={testID} style={{ gap: spacing.sm }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4 }}>
         <T v="headline">{title}</T>
-        {action ? <Pressable testID={testID ? `${testID}-action` : undefined} hitSlop={10} onPress={onAction}><Text style={{ color: colors.brandPrimary, fontWeight: "600" }}>{action}</Text></Pressable> : null}
+        {action ? <Pressable testID={testID ? `${testID}-action` : undefined} hitSlop={10} onPress={onAction ? () => safely(onAction) : undefined}><Text style={{ color: colors.brandPrimary, fontWeight: "600" }}>{action}</Text></Pressable> : null}
       </View>
       {children}
-    </Animated.View>
+    </View>
   );
 }
 
 export function Row({ title, subtitle, left, right, onPress, onLongPress, testID, done, strike }: { title: string; subtitle?: string; left?: ReactNode; right?: ReactNode; onPress?: () => void; onLongPress?: () => void; testID?: string; done?: boolean; strike?: boolean }) {
   const { colors } = useTheme();
   return (
-    <Pressable testID={testID} onPress={onPress} onLongPress={onLongPress} disabled={!onPress && !onLongPress} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 52, paddingVertical: 10, opacity: pressed ? 0.7 : 1 })}>
+    <Pressable testID={testID} onPress={onPress ? () => safely(onPress) : undefined} onLongPress={onLongPress ? () => safely(onLongPress) : undefined} disabled={!onPress && !onLongPress} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 52, paddingVertical: 10, opacity: pressed ? 0.7 : 1 })}>
       {left}
       <View style={{ flex: 1 }}>
         <Text numberOfLines={2} style={[type.body, { color: done ? colors.muted : colors.onSurface, fontWeight: "500", textDecorationLine: strike && done ? "line-through" : "none" }]}>{title}</Text>
@@ -138,7 +138,7 @@ export function Row({ title, subtitle, left, right, onPress, onLongPress, testID
 export function Check({ on, onPress, testID, label }: { on: boolean; onPress: () => void; testID?: string; label: string }) {
   const { colors } = useTheme();
   return (
-    <Pressable testID={testID} accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={label} hitSlop={10} onPress={() => { tap(); onPress(); }}
+    <Pressable testID={testID} accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={label} hitSlop={10} onPress={() => { tap(); safely(onPress); }}
       style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: on ? colors.success : colors.borderStrong, backgroundColor: on ? colors.success : "transparent", alignItems: "center", justifyContent: "center" }}>
       {on ? <Icon name="checkmark" size={16} color={colors.onSuccess} /> : null}
     </Pressable>
@@ -202,7 +202,7 @@ export function Badge({ label, tone = "brand", testID }: { label: string; tone?:
 export function Fab({ onPress, testID, icon = "add", bottom }: { onPress: () => void; testID: string; icon?: string; bottom: number }) {
   const { colors } = useTheme();
   return (
-    <Pressable testID={testID} accessibilityLabel="Add" accessibilityRole="button" onPress={() => { tap(); onPress(); }}
+    <Pressable testID={testID} accessibilityLabel="Add" accessibilityRole="button" onPress={() => { tap(); safely(onPress); }}
       style={({ pressed }) => ({ position: "absolute", right: spacing.lg, bottom, width: 58, height: 58, borderRadius: 29, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", shadowColor: colors.brandPrimary, shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6, transform: [{ scale: pressed ? 0.94 : 1 }] })}>
       <Icon name={icon} size={28} color={colors.onBrandPrimary} />
     </Pressable>

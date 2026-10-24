@@ -20,8 +20,12 @@
       "permissions": [
         "POST_NOTIFICATIONS",
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
-      ]
+        "VIBRATE",
+        "SCHEDULE_EXACT_ALARM",
+        "USE_EXACT_ALARM",
+        "WAKE_LOCK"
+      ],
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "bundler": "metro",
@@ -36,7 +40,7 @@
           "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#F5F6F8"
         }
       ],
       "expo-font",
@@ -46,7 +50,13 @@
       "expo-status-bar",
       "@react-native-vector-icons/ionicons",
       "expo-sharing",
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "color": "#FF5E00",
+          "defaultChannel": "reminders"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

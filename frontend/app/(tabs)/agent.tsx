@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { FlatList, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { FlatList, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -65,7 +65,7 @@ export default function Agent() {
   const msgs = useCol("messages");
   const [text, setText] = useState("");
   const list = useRef<FlatList>(null);
-  const ordered = [...msgs].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || 0);
+  const ordered = useMemo(() => [...msgs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [msgs]);
   const send = (input?: string) => {
     const q = (input ?? text).trim(); if (!q) return;
     setText("");
@@ -78,7 +78,9 @@ export default function Agent() {
       return;
     }
     const lastTask = db.list("tasks")[0]?.title;
-    const r = interpret(q, { lastTask });
+    let r;
+    try { r = interpret(q, { lastTask }); }
+    catch (e: any) { db.add("messages", { role: "agent", text: `Sorry — I couldn't process that (${e?.message ?? "unknown error"}). Nothing was changed. Try rephrasing or type "help".` }); return; }
     const qItems = r.actions.length ? enqueue(r.actions as Action[], "agent") : [];
     const dupNote = r.actions.length && !qItems.length ? "\n(These actions are already pending or were just applied — duplicate prevented.)" : "";
     db.add("messages", { role: "agent", text: r.text + dupNote, queueIds: qItems.map((x) => x.id) });
@@ -92,8 +94,8 @@ export default function Agent() {
         <IconBtn testID="agent-queue-button" label="Action queue" icon="list" onPress={() => router.push("/queue")} />
         <IconBtn testID="agent-clear-button" label="Clear history" icon="trash-outline" onPress={async () => { if (await ui.confirm({ title: "Clear conversation?", message: "Deletes local chat history. Actions and data are kept.", destructive: true, confirmLabel: "Clear" })) db.replace("messages", [], "Clear chat"); }} />
       </View>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }} keyboardVerticalOffset={0}>
-        <FlatList ref={list} inverted data={ordered} keyExtractor={(m) => m.id} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }} keyboardVerticalOffset={0}>
+        <FlatList ref={list} inverted data={ordered} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" initialNumToRender={12} windowSize={7} removeClippedSubviews keyExtractor={(m) => m.id} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
           renderItem={({ item }) => <Bubble m={item} />}
           ListFooterComponent={!ordered.length ? (
             <View style={{ gap: 8, marginBottom: spacing.lg }}>

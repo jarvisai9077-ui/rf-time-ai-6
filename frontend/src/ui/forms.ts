@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { db, Item } from "@/src/store/db";
 import { scheduleReminder, cancelReminder } from "@/src/engine/notify";
 import { Field } from "./overlay";
+import { reportError } from "./errorBus";
 
 export const PRIO = [{ label: "P1 High", value: 1 }, { label: "P2", value: 2 }, { label: "P3 Normal", value: 3 }, { label: "P4 Low", value: 4 }];
 export const RECUR = [{ label: "None", value: "none" }, { label: "Daily", value: "daily" }, { label: "Weekdays", value: "weekdays" }, { label: "Weekly", value: "weekly" }, { label: "Monthly", value: "monthly" }, { label: "Yearly", value: "yearly" }];
@@ -33,9 +34,12 @@ export async function saveTask(v: Record<string, any>, existing?: Item): Promise
   let t: Item;
   if (existing) { db.update("tasks", existing.id, data, "Edit task"); t = { ...existing, ...data }; }
   else t = db.add("tasks", { status: "todo", subtasks: [], ...data, dependsOn: data.dependsOn ?? [] }, "Add task");
+  if (existing?.notifId && v.reminderAt !== existing.reminderAt) { await cancelReminder(existing.notifId); db.update("tasks", t.id, { notifId: null }, undefined, true); }
+  if (v.reminderAt && new Date(v.reminderAt) <= new Date() && v.reminderAt !== existing?.reminderAt) return "Reminder time must be in the future.";
   if (v.reminderAt && v.reminderAt !== existing?.reminderAt && new Date(v.reminderAt) > new Date()) {
     const r = await scheduleReminder(t.title, new Date(v.reminderAt), { kind: "task", refId: t.id, priority: v.priority === 1 ? "high" : "normal" });
     db.update("tasks", t.id, { notifId: r.notifId }, undefined, true);
+    if (r.error) reportError(r.error, "Task saved, reminder");
   }
 }
 

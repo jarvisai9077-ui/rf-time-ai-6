@@ -34,3 +34,10 @@ Testing agent result: 95% pass. All 21 module tiles open without crashing, and d
 ## Backlog
 - P1: Native Android home-screen widgets (needs a native build). Add a date-picker UI and drag-to-reschedule on the calendar.
 - P2: Optional on-device LLM/speech when available. Encrypted backup export. Add more localization strings.
+
+## Iteration 2 (2026-06)
+- Performance: data loads in parallel at module start; native splash shown until ready (no JS spinner); app-lock check skipped unless enabled; automations/notification setup deferred 800ms; Today computations memoized; Clock re-renders only the ticking display; calendar year view lightweight; tasks/notes paginated (60); agent list virtualized; entering animations removed.
+- Error handling: global error bus + JS global handler → toasts; all buttons/rows wrapped in safe handlers; persistence retries on failure; agent parse errors caught.
+- Keyboard: Next/Done focus chaining in forms, interactive dismiss, tab bar hides on keyboard, Android resize mode, Modal translucency for keyboard-controller.
+- Notifications: Android channels (reminders, alarms), contextual permission request on first reminder, tap-to-open routes, cancel on edit/delete; permissions POST_NOTIFICATIONS, SCHEDULE_EXACT_ALARM, USE_EXACT_ALARM, RECEIVE_BOOT_COMPLETED, WAKE_LOCK, VIBRATE. OS-scheduled so they fire when app is closed (validate on native build).
+- Privacy Policy (/privacy) and Terms (/terms) with support email jarvisai9077@gmail.com, linked from Hub footer and Settings › About.

@@ -6,7 +6,7 @@ import { db, useCol } from "@/src/store/db";
 import { radius, type, useTheme } from "@/src/theme";
 import { fmtDay } from "@/src/engine/time";
 import { pickText, saveAndShare } from "@/src/engine/io";
-import { Badge, ChipRow, Empty, Fab, Glass, Icon, IconBtn, Row, Screen, T, Divider } from "@/src/ui/kit";
+import { Badge, Btn, ChipRow, Empty, Fab, Glass, Icon, IconBtn, Row, Screen, T, Divider } from "@/src/ui/kit";
 import { useUI } from "@/src/ui/overlay";
 
 const TEMPLATES: Record<string, { title: string; body: string; checklist?: string[] }> = {
@@ -23,6 +23,7 @@ export default function Notes() {
   const notes = useCol("notes"); const raw = db.get().data.notes;
   const [f, setF] = useState<"all" | "pinned" | "favorites" | "archived" | "trash" | string>("all");
   const [q, setQ] = useState("");
+  const [limit, setLimit] = useState(60);
   const folders = [...new Set(notes.map((n) => n.folder || "General"))];
   const tags = [...new Set(notes.flatMap((n) => n.tags ?? []))];
   const items = useMemo(() => {
@@ -46,12 +47,13 @@ export default function Notes() {
           <TextInput testID="notes-search-input" value={q} onChangeText={setQ} placeholder="Search notes" placeholderTextColor={colors.muted} style={[type.body, { height: 40, backgroundColor: colors.surfaceTertiary, borderRadius: radius.pill, paddingHorizontal: 14, color: colors.onSurface, marginTop: 6 }]} />
           <ChipRow testID="notes-filter" value={f} onChange={setF} options={[{ label: "All", value: "all" }, { label: "Pinned", value: "pinned" }, { label: "Favorites", value: "favorites" }, ...folders.map((x) => ({ label: "📁 " + x, value: "folder:" + x })), ...tags.map((x) => ({ label: "#" + x, value: "tag:" + x })), { label: "Archive", value: "archived" }, { label: "Trash", value: "trash" }]} />
         </View>}>
-        {items.length ? <Glass style={{ paddingVertical: 4 }}>{items.map((n, i) => (
+        {items.length ? <Glass style={{ paddingVertical: 4 }}>{items.slice(0, limit).map((n, i) => (
           <View key={n.id}>{i ? <Divider /> : null}
             <Row testID={`note-row-${n.id}`} title={n.title || "Untitled"} subtitle={`${fmtDay(n.updatedAt)} · ${n.folder || "General"} · ${(n.body ?? "").slice(0, 60)}`} left={<Icon name={n.pinned ? "pin" : "document-text-outline"} size={18} color={colors.brandPrimary} />}
               right={f === "trash" ? <Badge label="restore" /> : n.favorite ? <Icon name="star" size={16} color={colors.warning} /> : undefined}
               onPress={() => (f === "trash" ? (db.restore("notes", n.id), ui.toast("Note restored")) : router.push(`/note/${n.id}` as any))} />
           </View>))}</Glass> : <Empty testID="notes-empty" icon="document-text-outline" title={f === "trash" ? "Trash is empty" : "No notes"} action={f !== "trash" ? "New note" : undefined} onAction={() => create("blank")} />}
+        {items.length > limit ? <Btn kind="secondary" label={`Show more (${items.length - limit})`} onPress={() => setLimit(limit + 60)} /> : null}
         {f === "trash" && items.length ? <T v="caption" muted>Tap a note to restore it. Notes in trash are kept until you delete them permanently from the note.</T> : null}
       </Screen>
       <Fab testID="notes-add-fab" bottom={insets.bottom + 16} onPress={() => ui.sheet("New note from template", <View style={{ gap: 4 }}>{Object.entries(TEMPLATES).map(([k, t]) => <Row key={k} testID={`note-template-${k}`} title={k[0].toUpperCase() + k.slice(1)} subtitle={t.body.slice(0, 50) || "Empty"} onPress={() => create(k)} />)}</View>)} />

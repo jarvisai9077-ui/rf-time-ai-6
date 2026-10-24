@@ -1,6 +1,7 @@
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, AppState, LogBox, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, LogBox, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { StatusBar } from "expo-status-bar";
@@ -12,8 +13,20 @@ import { db, flush, hydrate, useSettings, useStore } from "@/src/store/db";
 import { radius, setColorScheme, spacing, useTheme } from "@/src/theme";
 import { Backdrop, Btn, Icon, T } from "@/src/ui/kit";
 import { UIProvider } from "@/src/ui/overlay";
+import { initNotifications, listenForTaps } from "@/src/engine/notify";
+import { reportError } from "@/src/ui/errorBus";
 
 LogBox.ignoreAllLogs(true);
+// Keep the native splash only until local data is read (tens of ms) — no JS spinner screen.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+// Start reading local data immediately at module load, before the first render.
+const hydration = hydrate().catch((e) => reportError(e, "Loading data"));
+// Global safety net: unexpected JS errors become a toast instead of a silent failure.
+const g: any = globalThis as any;
+if (g.ErrorUtils?.setGlobalHandler) {
+  const prev = g.ErrorUtils.getGlobalHandler?.();
+  g.ErrorUtils.setGlobalHandler((e: any, fatal?: boolean) => { reportError(e, "Unexpected error"); if (fatal && prev) prev(e, fatal); });
+}
 
 function Lock({ onUnlock }: { onUnlock: () => void }) {
   const { colors } = useTheme();
@@ -38,22 +51,26 @@ function Shell() {
   const { colors, scheme } = useTheme();
   const [locked, setLocked] = useState<boolean | null>(null);
 
-  useEffect(() => { hydrate(); }, []);
+  useEffect(() => { hydration.then(() => {}); }, []);
   useEffect(() => { setColorScheme(st.theme === "system" ? null : st.theme); }, [st.theme]);
   useEffect(() => {
     if (!ready) return;
-    (async () => setLocked(st.appLock && (await hasPin())))();
-    tickAutomations();
-    const iv = setInterval(tickAutomations, 60000);
+    if (!st.appLock) setLocked(false); // no secure-store round-trip unless app lock is on
+    else hasPin().then((h) => setLocked(h)).catch(() => setLocked(false));
+    // Heavy/non-visual work runs after the first frame & animations, never blocking launch.
+    const task = setTimeout(() => { initNotifications(); tickAutomations().catch((e) => reportError(e, "Automations")); }, 800);
+    const unTap = listenForTaps((route) => { try { router.push(route as any); } catch {} });
+    const iv = setInterval(() => tickAutomations().catch(() => {}), 60000);
     const sub = AppState.addEventListener("change", (s) => {
-      if (s === "active") tickAutomations();
-      else flush(); // persist immediately when backgrounded (process may be killed)
+      if (s === "active") tickAutomations().catch(() => {});
+      else flush().catch(() => {}); // persist immediately when backgrounded (process may be killed)
     });
-    return () => { clearInterval(iv); sub.remove(); };
+    return () => { clearInterval(iv); sub.remove(); clearTimeout(task); unTap(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
-  if (!ready || locked === null) return <View style={{ flex: 1, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.brandPrimary} /></View>;
+  useEffect(() => { if (ready && locked !== null) SplashScreen.hideAsync().catch(() => {}); }, [ready, locked]);
+  if (!ready || locked === null) return <View style={{ flex: 1, backgroundColor: colors.surface }} />;
   if (locked) return <Lock onUnlock={() => setLocked(false)} />;
   return (
     <>

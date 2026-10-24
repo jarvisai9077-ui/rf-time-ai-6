@@ -10,11 +10,12 @@ import { durLabel, fmtDT } from "@/src/engine/time";
 import { Badge, Btn, Check, ChipRow, Divider, Empty, Fab, Glass, IconBtn, Row, Screen, T, Chip } from "@/src/ui/kit";
 import { completeTask, saveTask, taskFields } from "@/src/ui/forms";
 import { useUI } from "@/src/ui/overlay";
+import { cancelReminder } from "@/src/engine/notify";
 
 type L = "today" | "upcoming" | "overdue" | "someday" | "all" | "done" | "archived" | "trash";
 
 export function openTaskEditor(ui: ReturnType<typeof useUI>, t?: Item) {
-  ui.form({ title: t ? "Edit task" : "New task", fields: taskFields(), initial: t, onSubmit: (v) => saveTask(v, t), onDelete: t ? () => { db.remove("tasks", t.id); ui.toast("Moved to trash", () => db.undo()); } : undefined });
+  ui.form({ title: t ? "Edit task" : "New task", fields: taskFields(), initial: t, onSubmit: (v) => saveTask(v, t), onDelete: t ? () => { cancelReminder(t.notifId); db.remove("tasks", t.id); ui.toast("Moved to trash", () => db.undo()); } : undefined });
 }
 
 export default function Tasks() {
@@ -28,6 +29,7 @@ export default function Tasks() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<"smart" | "due" | "priority" | "title">("smart");
   const [sel, setSel] = useState<string[]>([]);
+  const [limit, setLimit] = useState(60); // render in pages for large lists
   const now = new Date();
   const items = useMemo(() => {
     let xs: Item[] = list === "trash" ? raw.filter((t) => t.deleted) : all;
@@ -46,7 +48,8 @@ export default function Tasks() {
       }
     });
     if (q) { const s = q.toLowerCase(); xs = xs.filter((t) => (t.title + " " + (t.notes ?? "") + " " + (t.tags ?? []).join(" ")).toLowerCase().includes(s)); }
-    const by = { smart: (a: Item, b: Item) => taskScore(b).score - taskScore(a).score, due: (a: Item, b: Item) => (a.due ?? "9").localeCompare(b.due ?? "9"), priority: (a: Item, b: Item) => (a.priority ?? 3) - (b.priority ?? 3), title: (a: Item, b: Item) => a.title.localeCompare(b.title) };
+    const scores = new Map(sort === "smart" ? xs.map((t) => [t.id, taskScore(t).score]) : []);
+    const by = { smart: (a: Item, b: Item) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0), due: (a: Item, b: Item) => (a.due ?? "9").localeCompare(b.due ?? "9"), priority: (a: Item, b: Item) => (a.priority ?? 3) - (b.priority ?? 3), title: (a: Item, b: Item) => a.title.localeCompare(b.title) };
     return [...xs].sort(by[sort]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, raw, list, q, sort, params.project]);
@@ -72,7 +75,7 @@ export default function Tasks() {
             <Btn small kind="ghost" label="Clear" onPress={() => setSel([])} />
           </View> : null}
         </View>}>
-        {items.length ? <Glass style={{ paddingVertical: 4 }}>{items.map((t, i) => {
+        {items.length ? <Glass style={{ paddingVertical: 4 }}>{items.slice(0, limit).map((t, i) => {
           const blocked = depsOpen(t).length > 0;
           const subs = t.subtasks ?? [];
           return (
@@ -84,6 +87,7 @@ export default function Tasks() {
                 onPress={() => (list === "trash" ? db.restore("tasks", t.id) : detail(t))} onLongPress={() => setSel([...sel, t.id])} />
             </View>);
         })}</Glass> : <Empty testID="tasks-empty" icon="checkmark-done-outline" title={list === "trash" ? "Trash is empty" : "No tasks here"} body={list === "today" ? "Add a task or ask the Agent." : undefined} action={list !== "trash" ? "Add task" : undefined} onAction={() => openTaskEditor(ui)} />}
+        {items.length > limit ? <Btn kind="secondary" testID="tasks-show-more" label={`Show more (${items.length - limit} left)`} onPress={() => setLimit(limit + 60)} /> : null}
         {list === "trash" && items.length ? <Btn kind="danger" label="Empty trash" testID="empty-trash-button" onPress={async () => { if (await ui.confirm({ title: "Empty trash?", message: "Permanently deletes these tasks. Undo is available right after.", destructive: true })) { db.replace("tasks", db.get().data.tasks.filter((t) => !t.deleted), "Empty trash"); ui.toast("Trash emptied", () => db.undo()); } }} /> : null}
       </Screen>
       <Fab testID="tasks-add-fab" bottom={insets.bottom + 16} onPress={() => openTaskEditor(ui)} />
@@ -120,7 +124,7 @@ function TaskDetail({ id }: { id: string }) {
         <Btn small kind="secondary" label={t.pinned ? "Unpin" : "Pin to Today"} testID="task-pin-button" onPress={() => db.update("tasks", t.id, { pinned: !t.pinned })} />
         <Btn small kind="secondary" label="Duplicate" testID="task-duplicate-button" onPress={() => { const { id: _i, createdAt, updatedAt, ...rest } = t; db.add("tasks", { ...rest, title: t.title + " (copy)", status: "todo" }); ui.toast("Duplicated"); }} />
         <Btn small kind="secondary" label={t.archived ? "Unarchive" : "Archive"} testID="task-archive-button" onPress={() => { db.update("tasks", t.id, { archived: !t.archived }); ui.closeSheet(); }} />
-        <Btn small kind="danger" label="Delete" testID="task-delete-button" onPress={() => { db.remove("tasks", t.id); ui.closeSheet(); ui.toast("Moved to trash", () => db.undo()); }} />
+        <Btn small kind="danger" label="Delete" testID="task-delete-button" onPress={() => { cancelReminder(t.notifId); db.remove("tasks", t.id); ui.closeSheet(); ui.toast("Moved to trash", () => db.undo()); }} />
       </View>
     </View>
   );
